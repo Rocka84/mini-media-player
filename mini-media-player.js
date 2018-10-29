@@ -38,7 +38,8 @@ class MiniMediaPlayer extends LitElement {
       config: Object,
       entity: Object,
       source: String,
-      position: Number
+      position: Number,
+      active: Boolean
     };
   }
 
@@ -57,6 +58,7 @@ class MiniMediaPlayer extends LitElement {
       artwork: 'default',
       artwork_border: false,
       background: false,
+      consider_off_after: false,
       group: false,
       hide_controls: false,
       hide_icon: false,
@@ -76,6 +78,7 @@ class MiniMediaPlayer extends LitElement {
       title: '',
       volume_stateless: false
     }, config);
+    conf.consider_off_after = Number(conf.consider_off_after) * 60 || false;
     conf.max_volume = Number(conf.max_volume) || 100;
     conf.collapse = (conf.hide_controls || conf.hide_volume)
     conf.short_info = (conf.short_info || conf.scroll_info || conf.collapse);
@@ -90,6 +93,7 @@ class MiniMediaPlayer extends LitElement {
       || changedProps.has('position'));
     if (update) {
       if (this.config.show_progress) this._checkProgress();
+      this.active = this._isActive();
       return true;
     }
   }
@@ -114,8 +118,9 @@ class MiniMediaPlayer extends LitElement {
         <header>${config.title}</header>
         <div class='entity flex'>
           ${this._renderIcon(artwork)}
-          <div class='entity__info' ?short=${config.short_info}>
-            <div class='entity__info__name' ?has-info=${this._hasMediaInfo()}>
+          <div class='entity__info' ?short=${config.short_info}
+            ?has-info=${this._hasMediaInfo()}>
+            <div class='entity__info__name'>
               ${this._computeName()}
             </div>
             ${this._renderMediaInfo(config.short_info)}
@@ -124,7 +129,7 @@ class MiniMediaPlayer extends LitElement {
             ${this._renderPowerStrip(entity)}
           </div>
         </div>
-        ${!config.collapse && this._isActive() ? this._renderControlRow(entity) : html``}
+        ${!config.collapse && this.active ? this._renderControlRow(entity) : html``}
         ${config.show_tts ? this._renderTts() : html``}
         ${config.show_progress && this._showProgress ? this._renderProgress(entity) : ''}
       </ha-card>`;
@@ -142,6 +147,7 @@ class MiniMediaPlayer extends LitElement {
     return (this.entity.attributes.entity_picture
       && this.entity.attributes.entity_picture != '')
       && this.config.artwork !== 'none'
+      && this.active
       ? this.entity.attributes.entity_picture
       : false;
   }
@@ -160,7 +166,7 @@ class MiniMediaPlayer extends LitElement {
 
   _renderIcon(artwork) {
     if (this.config.hide_icon) return;
-    if (this._isActive() && artwork && this.config.artwork == 'default') {
+    if (this.active && artwork && this.config.artwork == 'default') {
       return html`
         <div class='entity__artwork' ?border=${this.config.artwork_border}
           style='background-image: url("${artwork}")'
@@ -403,7 +409,7 @@ class MiniMediaPlayer extends LitElement {
 
   get _showProgress() {
     return (
-      (this._isPlaying() || this._isPaused())
+      (this._isPlaying() || this._isPaused()) && this.active
       && 'media_duration' in this.entity.attributes
       && 'media_position' in this.entity.attributes
       && 'media_position_updated_at' in this.entity.attributes);
@@ -423,15 +429,34 @@ class MiniMediaPlayer extends LitElement {
     return this.entity.state === 'playing';
   }
 
-  _isActive() {
-    return (this.entity.state !== 'off' && this.entity.state !== 'unavailable') || false;
+  _isActive(inactive = false) {
+    if (this.config.consider_off_after)
+      inactive = this._isInactive();
+    return ( this.entity.state !== 'off'
+      && this.entity.state !== 'unavailable'
+      && !inactive) || false;
+  }
+
+  _isInactive() {
+    const updated = this.entity.attributes.media_position_updated_at;
+    if (updated) {
+      const diff = (Date.now() - new Date(updated).getTime()) / 1000;
+      if (diff > this.config.consider_off_after) return true;
+      if (!this._inactiveTracker) {
+        this._inactiveTracker = setTimeout(() => {
+          this.position = 0;
+          this._inactiveTracker = null;
+        }, (this.config.consider_off_after - diff) * 1000)
+      }
+    }
+    return false;
   }
 
   _hasMediaInfo() {
     const items = MEDIA_INFO.map(item => {
       return this._getAttribute(item.attr);
     }).filter(item => item !== '');
-    return items.length == 0 ? false : true;
+    return items.length !== 0 && this.active ? true : false;
   }
 
   _getAttribute(attr, {entity} = this) {
@@ -579,8 +604,11 @@ class MiniMediaPlayer extends LitElement {
           text-overflow: ellipsis;
           white-space: nowrap;
         }
-        .entity__info__name[has-info] {
+        .entity__info[has-info] .entity__info__name {
           line-height: 20px;
+        }
+        .entity__info[has-info] .entity__info__media {
+          display: block;
         }
         .entity__info__name, .entity__control-row--top {
           line-height: 40px;
@@ -594,6 +622,7 @@ class MiniMediaPlayer extends LitElement {
         }
         .entity__info__media {
           color: var(--secondary-text-color);
+          display: none;
         }
         .entity__info__media[short] {
           overflow: hidden;
