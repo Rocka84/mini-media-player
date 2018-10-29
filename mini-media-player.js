@@ -92,8 +92,8 @@ class MiniMediaPlayer extends LitElement {
       || changedProps.has('source')
       || changedProps.has('position'));
     if (update) {
-      if (this.config.show_progress) this._checkProgress();
       this.active = this._isActive();
+      if (this.config.show_progress) this._checkProgress();
       return true;
     }
   }
