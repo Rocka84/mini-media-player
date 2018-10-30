@@ -58,7 +58,7 @@ class MiniMediaPlayer extends LitElement {
       artwork: 'default',
       artwork_border: false,
       background: false,
-      consider_off_after: false,
+      consider_idle_after: false,
       group: false,
       hide_controls: false,
       hide_icon: false,
@@ -78,7 +78,7 @@ class MiniMediaPlayer extends LitElement {
       title: '',
       volume_stateless: false
     }, config);
-    conf.consider_off_after = Number(conf.consider_off_after) * 60 || false;
+    conf.consider_idle_after = Number(conf.consider_idle_after) * 60 || false;
     conf.max_volume = Number(conf.max_volume) || 100;
     conf.collapse = (conf.hide_controls || conf.hide_volume)
     conf.short_info = (conf.short_info || conf.scroll_info || conf.collapse);
@@ -247,7 +247,7 @@ class MiniMediaPlayer extends LitElement {
         ${active && config.hide_volume && !config.hide_controls ? this._renderMediaControls(entity) : html``}
         <div class='flex right'>
           ${config.show_source ? this._renderSource(entity) : html``}
-          ${config.consider_off_after ? this._renderIdleStatus() : html``}
+          ${config.consider_idle_after ? this._renderIdleStatus() : html``}
           ${!config.hide_power ? this._renderPower() : html``}
         <div>
       </div>`;
@@ -445,7 +445,7 @@ class MiniMediaPlayer extends LitElement {
   }
 
   _isActive(inactive = false) {
-    if (this.config.consider_off_after)
+    if (this.config.consider_idle_after)
       inactive = this._isInactive();
     return ( this.entity.state !== 'off'
       && this.entity.state !== 'unavailable'
@@ -456,12 +456,12 @@ class MiniMediaPlayer extends LitElement {
     const updated = this.entity.attributes.media_position_updated_at;
     if (updated) {
       const diff = (Date.now() - new Date(updated).getTime()) / 1000;
-      if (diff > this.config.consider_off_after) return true;
+      if (diff > this.config.consider_idle_after) return true;
       if (!this._inactiveTracker) {
         this._inactiveTracker = setTimeout(() => {
           this.position = 0;
           this._inactiveTracker = null;
-        }, (this.config.consider_off_after - diff) * 1000)
+        }, (this.config.consider_idle_after - diff) * 1000)
       }
     }
     return false;
