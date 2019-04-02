@@ -2,3 +2,4 @@
 /dist/
 package-lock.json
 .DS_Store
+mini-media-player-bundle.js
